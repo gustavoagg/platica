@@ -3,7 +3,7 @@
 -- Run this in your Supabase SQL Editor (https://supabase.com)
 -- ═══════════════════════════════════════════════════════════
 
--- 1. Users table (simple auth, no Supabase Auth)
+-- 1. Users table
 CREATE TABLE IF NOT EXISTS users (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -35,14 +35,21 @@ CREATE TABLE IF NOT EXISTS transactions (
   amount NUMERIC,           -- USD amount (always positive)
   commission NUMERIC DEFAULT 0,  -- USD flat commission
 
-  -- ── Uruguay fields ──
-  usd_amount NUMERIC,       -- USD amount to withdraw
-  exchange_rate NUMERIC,     -- USD → UYU official rate
-  uyu_amount NUMERIC,       -- Calculated: usd_amount * exchange_rate
-  binance_commission NUMERIC,-- Binance fee (percentage)
-  usdt_amount NUMERIC,      -- USDT after Binance fee
-  p2p_commission NUMERIC,   -- P2P fee (percentage)
-  bs_amount NUMERIC,        -- Final Bs amount
+  -- ── Uruguay fields (2-Step model) ──
+  usd_amount NUMERIC,           -- USD amount transferred
+  itau_rate NUMERIC,            -- ITAU official USD -> UYU rate
+  binance_usdt_rate NUMERIC,    -- Binance UYU -> USDT rate
+  rate_diff NUMERIC,            -- Binance rate - ITAU rate
+  commission_usd NUMERIC,       -- Extra commission USD: (rate_diff / itau_rate) * usd_amount
+  total_uy_deducted NUMERIC,    -- usd_amount + commission_usd
+  usdt_amount NUMERIC,          -- Resulting USDT
+  step1_date TIMESTAMPTZ,       -- Step 1 date
+  
+  -- Step 2 (USDT -> Bs, optional on creation)
+  usdt_p2p_rate NUMERIC,        -- P2P rate (Bs per USDT)
+  bs_amount NUMERIC,            -- Final Bs amount: usdt_amount * usdt_p2p_rate
+  step2_date TIMESTAMPTZ,       -- Step 2 date
+  step2_completed BOOLEAN DEFAULT FALSE,
 
   -- ── Transfer fields ──
   from_account_id UUID REFERENCES accounts(id),
@@ -60,11 +67,22 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Index for fast chronological queries
+-- Migrations for existing deployments
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS itau_rate NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS binance_usdt_rate NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rate_diff NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_usd NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS total_uy_deducted NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step1_date TIMESTAMPTZ;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS usdt_p2p_rate NUMERIC;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_date TIMESTAMPTZ;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_completed BOOLEAN DEFAULT FALSE;
+
+-- 4. Indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 
--- 5. Disable RLS (security is basic, handled at app level)
+-- 5. Disable RLS
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE accounts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions DISABLE ROW LEVEL SECURITY;
@@ -73,22 +91,18 @@ ALTER TABLE transactions DISABLE ROW LEVEL SECURITY;
 -- INITIAL DATA
 -- ═══════════════════════════════════════════════════════════
 
--- Users
 INSERT INTO users (username, password, role, display_name) VALUES
   ('oswaldo', 'pirata', 'viewer', 'Oswaldo'),
   ('sonia', 'negrita', 'admin', 'Sonia'),
   ('gus', 'gonzalez', 'admin', 'Gus')
 ON CONFLICT (username) DO NOTHING;
 
--- Accounts
 INSERT INTO accounts (name, currency, initial_balance) VALUES
   ('Zelle', 'USD', 10000),
   ('Uruguay', 'USD', 0)
 ON CONFLICT (name) DO NOTHING;
 
--- ═══════════════════════════════════════════════════════════
--- HELPER FUNCTION: Auto-update updated_at timestamp
--- ═══════════════════════════════════════════════════════════
+-- Trigger for auto updated_at
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -97,6 +111,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_transactions_updated_at ON transactions;
 CREATE TRIGGER trg_transactions_updated_at
   BEFORE UPDATE ON transactions
   FOR EACH ROW

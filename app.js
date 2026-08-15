@@ -218,7 +218,9 @@ function calculateBalance(accountName) {
 
     if (tx.type === 'uruguay' && tx.account_id === accountId) {
       const usdAmount = parseFloat(tx.usd_amount) || 0;
-      balance -= usdAmount;
+      const commissionUSD = parseFloat(tx.commission_usd) || 0;
+      const totalDeducted = parseFloat(tx.total_uy_deducted) || (usdAmount + commissionUSD);
+      balance -= totalDeducted;
     }
 
     if (tx.type === 'transfer') {
@@ -306,11 +308,16 @@ function renderTransactionItem(tx) {
     }
   } else if (tx.type === 'uruguay') {
     const usd = parseFloat(tx.usd_amount) || 0;
-    amountDisplay = `-${formatUSD(usd)}`;
+    const comUSD = parseFloat(tx.commission_usd) || 0;
+    const totalDeducted = parseFloat(tx.total_uy_deducted) || (usd + comUSD);
+    amountDisplay = `-${formatUSD(totalDeducted)}`;
     amountClass = 'expense';
     const bs = parseFloat(tx.bs_amount) || 0;
-    if (bs > 0) {
+    const usdt = parseFloat(tx.usdt_amount) || usd;
+    if (tx.step2_completed || bs > 0) {
       commissionText = `→ ${formatNumber(bs)} Bs`;
+    } else {
+      commissionText = `→ ${formatNumber(usdt)} USDT (Paso 1)`;
     }
   } else if (tx.type === 'transfer') {
     const fromAcc = state.accounts.find(a => a.id === tx.from_account_id);
@@ -331,7 +338,7 @@ function renderTransactionItem(tx) {
           <div class="tx-description">${escapeHtml(description)}</div>
           <div class="tx-meta">
             <span class="tx-type-badge">${config.label}</span>
-            <span class="tx-date">${formatDate(tx.date)}</span>
+            <span class="tx-date">${formatDate(tx.step1_date || tx.date)}</span>
           </div>
         </div>
         <div class="tx-amount-col">
@@ -391,50 +398,78 @@ function viewTransaction(id) {
       </div>
     `;
   } else if (tx.type === 'uruguay') {
+    const usd = parseFloat(tx.usd_amount) || 0;
+    const comUSD = parseFloat(tx.commission_usd) || 0;
+    const totalDeducted = parseFloat(tx.total_uy_deducted) || (usd + comUSD);
+    const bs = parseFloat(tx.bs_amount) || 0;
+    const usdt = parseFloat(tx.usdt_amount) || usd;
+    const isStep2Done = tx.step2_completed || bs > 0;
+
     html = `
       <div class="balance-global" style="background: linear-gradient(135deg, #059669, #047857); margin-bottom: 16px;">
         <div class="balance-label">📉 Egreso Uruguay</div>
-        <div class="balance-amount">-${formatUSD(parseFloat(tx.usd_amount) || 0)}</div>
-        <div class="balance-currency">→ ${formatNumber(parseFloat(tx.bs_amount) || 0)} Bs</div>
+        <div class="balance-amount">-${formatUSD(totalDeducted)}</div>
+        <div class="balance-currency">${isStep2Done ? `→ ${formatNumber(bs)} Bs` : `→ ${formatNumber(usdt)} USDT (Paso 1)`}</div>
       </div>
-      <div class="form-section-title">Proceso de Conversión</div>
+
+      <div class="form-section-title">Paso 1: Pesos (ITAU) → USDT</div>
       <div class="tx-details" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Monto USD</span>
-          <span class="tx-detail-value">${formatUSD(parseFloat(tx.usd_amount) || 0)}</span>
+          <span class="tx-detail-label">Monto U$S</span>
+          <span class="tx-detail-value">${formatUSD(usd)}</span>
         </div>
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Tasa USD/UYU</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.exchange_rate) || 0, 4)}</span>
+          <span class="tx-detail-label">Tasa U$S/UYU (ITAU)</span>
+          <span class="tx-detail-value">${formatNumber(parseFloat(tx.itau_rate || tx.exchange_rate) || 0, 4)}</span>
         </div>
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Monto UYU</span>
-          <span class="tx-detail-value">$${formatNumber(parseFloat(tx.uyu_amount) || 0)}</span>
+          <span class="tx-detail-label">Tasa USDT (Binance)</span>
+          <span class="tx-detail-value">${formatNumber(parseFloat(tx.binance_usdt_rate) || 0, 4)}</span>
         </div>
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Com. Binance</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.binance_commission) || 0)}%</span>
+          <span class="tx-detail-label">Comisión adicional U$S</span>
+          <span class="tx-detail-value" style="color: var(--expense);">${formatUSD(comUSD)}</span>
         </div>
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Monto USDT</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.usdt_amount) || 0)} USDT</span>
+          <span class="tx-detail-label">Total descontado UY</span>
+          <span class="tx-detail-value" style="font-weight: 700; color: var(--expense);">-${formatUSD(totalDeducted)}</span>
         </div>
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Com. P2P</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.p2p_commission) || 0)}%</span>
+          <span class="tx-detail-label">USDT Resultante</span>
+          <span class="tx-detail-value">${formatNumber(usdt)} USDT</span>
         </div>
-        <div class="tx-detail-item" style="grid-column: 1 / -1; background: var(--income-bg); padding: 12px; border-radius: 8px;">
-          <span class="tx-detail-label" style="color: var(--income);">Monto Final en Bs</span>
-          <span class="tx-detail-value" style="font-size: 1.2rem; color: var(--income);">${formatNumber(parseFloat(tx.bs_amount) || 0)} Bs</span>
+        <div class="tx-detail-item" style="grid-column: 1 / -1;">
+          <span class="tx-detail-label">Fecha Paso 1</span>
+          <span class="tx-detail-value">${formatDateFull(tx.step1_date || tx.date)}</span>
         </div>
       </div>
+
+      <div class="form-section-title" style="margin-top: 16px;">Paso 2: USDT → Bs</div>
+      ${isStep2Done ? `
+        <div class="tx-details" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+          <div class="tx-detail-item">
+            <span class="tx-detail-label">Tasa P2P (Bs/USDT)</span>
+            <span class="tx-detail-value">${formatNumber(parseFloat(tx.usdt_p2p_rate) || 0, 4)}</span>
+          </div>
+          <div class="tx-detail-item">
+            <span class="tx-detail-label">Fecha Paso 2</span>
+            <span class="tx-detail-value">${formatDateFull(tx.step2_date || tx.date)}</span>
+          </div>
+          <div class="tx-detail-item" style="grid-column: 1 / -1; background: var(--income-bg); padding: 12px; border-radius: 8px;">
+            <span class="tx-detail-label" style="color: var(--income);">Monto Final en Bs</span>
+            <span class="tx-detail-value" style="font-size: 1.2rem; color: var(--income);">${formatNumber(bs)} Bs</span>
+          </div>
+        </div>
+      ` : `
+        <div style="padding: 12px; background: var(--transfer-bg); border: 1px dashed var(--transfer); border-radius: 8px; margin-top: 8px; text-align: center;">
+          <div style="font-weight: 600; color: var(--transfer); font-size: 0.9rem;">⏳ Paso 2 pendiente</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">Toca "Editar" cuando se realice la conversión a Bolívares para ingresar la tasa P2P.</div>
+        </div>
+      `}
+
       <div class="form-group" style="margin-top: 16px;">
         <div class="form-label">Descripción</div>
         <div style="font-size: 0.95rem; padding: 8px 0;">${escapeHtml(tx.description || 'Sin descripción')}</div>
-      </div>
-      <div class="form-group">
-        <div class="form-label">Fecha</div>
-        <div style="font-size: 0.95rem; padding: 8px 0;">${formatDateFull(tx.date)}</div>
       </div>
     `;
   } else if (tx.type === 'transfer') {
@@ -579,50 +614,68 @@ function renderFormFields() {
         <input id="f-description" class="form-input" placeholder="Ej: Envío para gastos del mes">
       </div>
 
-      <div class="form-section-title">Paso 1: USD → Pesos Uruguayos</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="f-usd-amount">Monto USD</label>
-          <input id="f-usd-amount" class="form-input" type="number" step="0.01" min="0" placeholder="0.00" oninput="calcUruguay()" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-exchange-rate">Tasa USD/UYU</label>
-          <input id="f-exchange-rate" class="form-input" type="number" step="0.0001" min="0" placeholder="42.50" oninput="calcUruguay()" required>
-        </div>
-      </div>
+      <div class="form-section-title">Paso 1: Pesos UYU → USDT (Obligatorio)</div>
+
       <div class="form-group">
-        <div class="form-label">Monto en Pesos Uruguayos</div>
-        <div class="form-calculated" id="f-uyu-display">$0.00 UYU</div>
+        <label class="form-label" for="f-step1-date">Fecha Paso 1</label>
+        <input id="f-step1-date" class="form-input" type="datetime-local" value="${getLocalDatetime()}">
       </div>
 
-      <div class="form-section-title">Paso 2: UYU → USDT (Binance)</div>
+      <div class="form-group">
+        <label class="form-label" for="f-usd-amount">Monto en U$S a egresar</label>
+        <input id="f-usd-amount" class="form-input" type="number" step="0.01" min="0" placeholder="100.00" oninput="calcUruguay()" required>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="f-binance-commission">Comisión Binance (%)</label>
-          <input id="f-binance-commission" class="form-input" type="number" step="0.01" min="0" placeholder="0.1" oninput="calcUruguay()" required>
+          <label class="form-label" for="f-itau-rate">Tasa U$S/UYU (ITAU)</label>
+          <input id="f-itau-rate" class="form-input" type="number" step="0.0001" min="0" placeholder="42.50" oninput="calcUruguay()" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-binance-usdt-rate">Tasa USDT (Binance)</label>
+          <input id="f-binance-usdt-rate" class="form-input" type="number" step="0.0001" min="0" placeholder="43.10" oninput="calcUruguay()" required>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top: 8px;">
+        <div class="form-group">
+          <div class="form-label">Diferencia de Tasa</div>
+          <div class="form-calculated" id="f-rate-diff-display">0.0000 UYU</div>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Comisión adicional U$S</div>
+          <div class="form-calculated" id="f-commission-usd-display" style="color: var(--expense); border-color: var(--expense);">$0.00</div>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top: 8px;">
+        <div class="form-group">
+          <div class="form-label">Total a descontar UY</div>
+          <div class="form-calculated" id="f-total-deducted-display" style="font-weight: 700; color: var(--expense); border-color: var(--expense);">$0.00</div>
         </div>
         <div class="form-group">
           <div class="form-label">USDT Resultante</div>
-          <div class="form-calculated" id="f-usdt-display">0.00 USDT</div>
+          <div class="form-calculated" id="f-usdt-display" style="font-weight: 700; color: var(--primary-dark);">0.00 USDT</div>
         </div>
       </div>
 
-      <div class="form-section-title">Paso 3: USDT → Bolívares (P2P)</div>
+      <div class="form-section-title" style="margin-top: 24px;">Paso 2: USDT → Bolívares (Opcional)</div>
+      
+      <div class="form-group">
+        <label class="form-label" for="f-step2-date">Fecha Paso 2</label>
+        <input id="f-step2-date" class="form-input" type="datetime-local" value="${getLocalDatetime()}">
+      </div>
+
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="f-p2p-commission">Comisión P2P (%)</label>
-          <input id="f-p2p-commission" class="form-input" type="number" step="0.01" min="0" placeholder="1.0" oninput="calcUruguay()">
+          <label class="form-label" for="f-usdt-p2p-rate">Tasa P2P (Bs / USDT)</label>
+          <input id="f-usdt-p2p-rate" class="form-input" type="number" step="0.01" min="0" placeholder="115.50" oninput="calcUruguay()">
+          <div class="form-hint">Cargar para calcular saldo final en Bs</div>
         </div>
         <div class="form-group">
-          <label class="form-label" for="f-bs-amount">Monto Final (Bs)</label>
-          <input id="f-bs-amount" class="form-input" type="number" step="0.01" min="0" placeholder="0.00" required>
-          <div class="form-hint">Ingresa el monto real recibido</div>
+          <div class="form-label">Monto Final en Bs</div>
+          <div class="form-calculated" id="f-bs-display" style="font-weight: 700; color: var(--income); border-color: var(--income);">Pendiente</div>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="f-date">Fecha</label>
-        <input id="f-date" class="form-input" type="datetime-local" value="${getLocalDatetime()}">
       </div>
     `;
   } else if (type === 'transfer') {
@@ -695,14 +748,30 @@ function selectDirection(dir) {
 
 function calcUruguay() {
   const usd = parseFloat($('f-usd-amount')?.value) || 0;
-  const rate = parseFloat($('f-exchange-rate')?.value) || 0;
-  const binancePct = parseFloat($('f-binance-commission')?.value) || 0;
+  const itauRate = parseFloat($('f-itau-rate')?.value) || 0;
+  const binanceRate = parseFloat($('f-binance-usdt-rate')?.value) || 0;
 
-  const uyu = usd * rate;
-  const usdt = usd * (1 - binancePct / 100);
+  let rateDiff = 0;
+  let commissionUSD = 0;
+  let totalDeductedUSD = 0;
+  let usdtAmount = 0;
 
-  if ($('f-uyu-display')) $('f-uyu-display').textContent = `$${formatNumber(uyu)} UYU`;
-  if ($('f-usdt-display')) $('f-usdt-display').textContent = `${formatNumber(usdt)} USDT`;
+  if (itauRate > 0 && binanceRate > 0) {
+    rateDiff = binanceRate - itauRate;
+    commissionUSD = (rateDiff / itauRate) * usd;
+    totalDeductedUSD = usd + commissionUSD;
+    usdtAmount = usd;
+  }
+
+  if ($('f-rate-diff-display')) $('f-rate-diff-display').textContent = `${formatNumber(rateDiff, 4)} UYU`;
+  if ($('f-commission-usd-display')) $('f-commission-usd-display').textContent = formatUSD(commissionUSD);
+  if ($('f-total-deducted-display')) $('f-total-deducted-display').textContent = formatUSD(totalDeductedUSD);
+  if ($('f-usdt-display')) $('f-usdt-display').textContent = `${formatNumber(usdtAmount)} USDT`;
+
+  const p2pRate = parseFloat($('f-usdt-p2p-rate')?.value) || 0;
+  const bsAmount = usdtAmount * p2pRate;
+
+  if ($('f-bs-display')) $('f-bs-display').textContent = p2pRate > 0 ? `${formatNumber(bsAmount)} Bs` : 'Pendiente';
 }
 
 function calcTransfer() {
@@ -744,11 +813,12 @@ function populateFormFields(tx) {
   } else if (tx.type === 'uruguay') {
     if ($('f-description')) $('f-description').value = tx.description || '';
     if ($('f-usd-amount')) $('f-usd-amount').value = tx.usd_amount || '';
-    if ($('f-exchange-rate')) $('f-exchange-rate').value = tx.exchange_rate || '';
-    if ($('f-binance-commission')) $('f-binance-commission').value = tx.binance_commission || '';
-    if ($('f-p2p-commission')) $('f-p2p-commission').value = tx.p2p_commission || '';
-    if ($('f-bs-amount')) $('f-bs-amount').value = tx.bs_amount || '';
-    if ($('f-date')) $('f-date').value = toLocalDatetime(tx.date);
+    if ($('f-itau-rate')) $('f-itau-rate').value = tx.itau_rate || tx.exchange_rate || '';
+    if ($('f-binance-usdt-rate')) $('f-binance-usdt-rate').value = tx.binance_usdt_rate || '';
+    if ($('f-step1-date')) $('f-step1-date').value = toLocalDatetime(tx.step1_date || tx.date);
+
+    if ($('f-usdt-p2p-rate')) $('f-usdt-p2p-rate').value = tx.usdt_p2p_rate || '';
+    if ($('f-step2-date')) $('f-step2-date').value = toLocalDatetime(tx.step2_date || tx.date);
     calcUruguay();
   } else if (tx.type === 'transfer') {
     if ($('f-description')) $('f-description').value = tx.description || '';
@@ -758,6 +828,100 @@ function populateFormFields(tx) {
     if ($('f-date')) $('f-date').value = toLocalDatetime(tx.date);
 
     // Set correct account direction
+    const fromPill = $('from-pill');
+    const toPill = $('to-pill');
+    const zelleId = getAccountId('Zelle');
+    const uruguayId = getAccountId('Uruguay');
+
+    if (tx.from_account_id === uruguayId) {
+      fromPill.dataset.account = uruguayId;
+      fromPill.innerHTML = '🇺🇾 Uruguay';
+      toPill.dataset.account = zelleId;
+      toPill.innerHTML = '⚡ Zelle';
+    }
+
+    calcTransfer();
+  }
+}
+
+function toLocalDatetime(dateStr) {
+  const d = new Date(dateStr);
+  const offset = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAVE / DELETE TRANSACTION
+// ═══════════════════════════════════════════════════════════
+
+async function saveTransaction() {
+  const type = state.formType;
+  const isEdit = !!state.editing;
+
+  let data = {
+    type,
+    description: $('f-description')?.value?.trim() || null,
+    date: new Date($('f-date')?.value || new Date()).toISOString(),
+  };
+
+  if (isEdit) {
+    data.modified_by = state.user.username;
+  } else {
+    data.created_by = state.user.username;
+  }
+
+  if (type === 'zelle') {
+    const direction = document.querySelector('.direction-option.selected')?.dataset.dir || 'expense';
+    const amount = parseFloat($('f-amount')?.value);
+    if (!amount || amount <= 0) {
+      showToast('Ingresa un monto válido', 'error');
+      return;
+    }
+    data.account_id = getAccountId('Zelle');
+    data.direction = direction;
+    data.amount = amount;
+    data.commission = parseFloat($('f-commission')?.value) || 0;
+  } else if (type === 'uruguay') {
+    const usdAmount = parseFloat($('f-usd-amount')?.value);
+    const itauRate = parseFloat($('f-itau-rate')?.value);
+    const binanceRate = parseFloat($('f-binance-usdt-rate')?.value);
+
+    if (!usdAmount || usdAmount <= 0 || !itauRate || itauRate <= 0 || !binanceRate || binanceRate <= 0) {
+      showToast('Completa los datos del Paso 1 (Monto U$S, Tasa ITAU y Tasa Binance)', 'error');
+      return;
+    }
+
+    const rateDiff = binanceRate - itauRate;
+    const commissionUSD = (rateDiff / itauRate) * usdAmount;
+    const totalDeducted = usdAmount + commissionUSD;
+    const usdtAmount = usdAmount;
+
+    const step1Date = new Date($('f-step1-date')?.value || new Date()).toISOString();
+
+    const p2pRate = parseFloat($('f-usdt-p2p-rate')?.value) || null;
+    const step2DateVal = $('f-step2-date')?.value;
+    const step2Date = p2pRate && step2DateVal ? new Date(step2DateVal).toISOString() : null;
+    const bsAmount = p2pRate ? usdtAmount * p2pRate : null;
+    const step2Completed = !!p2pRate && p2pRate > 0;
+
+    data.account_id = getAccountId('Uruguay');
+    data.direction = 'expense';
+    data.date = step1Date;
+    data.step1_date = step1Date;
+    data.usd_amount = usdAmount;
+    data.itau_rate = itauRate;
+    data.exchange_rate = itauRate;
+    data.binance_usdt_rate = binanceRate;
+    data.rate_diff = rateDiff;
+    data.commission_usd = commissionUSD;
+    data.total_uy_deducted = totalDeducted;
+    data.usdt_amount = usdtAmount;
+
+    data.usdt_p2p_rate = p2pRate;
+    data.bs_amount = bsAmount;
+    data.step2_date = step2Date;
+    data.step2_completed = step2Completed;
     const fromPill = $('from-pill');
     const toPill = $('to-pill');
     const zelleId = getAccountId('Zelle');
