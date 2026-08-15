@@ -1022,8 +1022,6 @@ async function saveTransaction() {
     data.from_account_id = $('from-pill').dataset.account;
     data.to_account_id = $('to-pill').dataset.account;
     data.transfer_amount = amount;
-    data.commission_from_usd = comFromUSD;
-    data.commission_to_usd = comToUSD;
     data.commission_from = comFromUSD;
     data.commission_to = comToUSD;
     data.amount_deducted = amount + comFromUSD;
