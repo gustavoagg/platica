@@ -54,11 +54,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- ── Transfer fields ──
   from_account_id UUID REFERENCES accounts(id),
   to_account_id UUID REFERENCES accounts(id),
-  transfer_amount NUMERIC,  -- USD being transferred
-  commission_from NUMERIC,  -- % commission on origin side
-  commission_to NUMERIC,    -- % commission on destination side
-  amount_deducted NUMERIC,  -- Total deducted from origin
-  net_received NUMERIC,     -- Net amount received at destination
+  transfer_amount NUMERIC,      -- USD being transferred
+  commission_from_usd NUMERIC DEFAULT 0,  -- Flat USD commission on origin side
+  commission_to_usd NUMERIC DEFAULT 0,    -- Flat USD commission on destination side
+  commission_from NUMERIC DEFAULT 0,      -- Legacy fallback
+  commission_to NUMERIC DEFAULT 0,        -- Legacy fallback
+  amount_deducted NUMERIC,      -- Total deducted from origin: transfer_amount + commission_from_usd
+  net_received NUMERIC,         -- Net amount received at destination: transfer_amount - commission_to_usd
 
   -- ── Audit ──
   created_by TEXT NOT NULL,
@@ -77,6 +79,8 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step1_date TIMESTAMPTZ;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS usdt_p2p_rate NUMERIC;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_date TIMESTAMPTZ;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_completed BOOLEAN DEFAULT FALSE;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_from_usd NUMERIC DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_to_usd NUMERIC DEFAULT 0;
 
 -- 4. Indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC);

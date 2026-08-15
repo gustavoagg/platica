@@ -475,34 +475,45 @@ function viewTransaction(id) {
   } else if (tx.type === 'transfer') {
     const fromAcc = state.accounts.find(a => a.id === tx.from_account_id);
     const toAcc = state.accounts.find(a => a.id === tx.to_account_id);
+    const transferAmount = parseFloat(tx.transfer_amount) || 0;
+    const comFrom = parseFloat(tx.commission_from_usd ?? tx.commission_from) || 0;
+    const comTo = parseFloat(tx.commission_to_usd ?? tx.commission_to) || 0;
+    const deducted = parseFloat(tx.amount_deducted) || (transferAmount + comFrom);
+    const received = parseFloat(tx.net_received) || Math.max(0, transferAmount - comTo);
+
     html = `
       <div class="balance-global" style="background: linear-gradient(135deg, #F59E0B, #D97706); margin-bottom: 16px;">
         <div class="balance-label">🔄 Transferencia</div>
-        <div class="balance-amount">${formatUSD(parseFloat(tx.transfer_amount) || 0)}</div>
+        <div class="balance-amount">${formatUSD(transferAmount)}</div>
         <div class="balance-currency">${fromAcc?.name || '?'} → ${toAcc?.name || '?'}</div>
       </div>
       <div class="tx-details" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div class="tx-detail-item">
-          <span class="tx-detail-label">Monto Transferido</span>
-          <span class="tx-detail-value">${formatUSD(parseFloat(tx.transfer_amount) || 0)}</span>
+          <span class="tx-detail-label">Monto a Transferir</span>
+          <span class="tx-detail-value">${formatUSD(transferAmount)}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Com. Origen (${fromAcc?.name || '?'})</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.commission_from) || 0)}%</span>
+          <span class="tx-detail-value">${comFrom > 0 ? formatUSD(comFrom) : 'Sin comisión ($0)'}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Deducido de ${fromAcc?.name || '?'}</span>
-          <span class="tx-detail-value" style="color: var(--expense);">-${formatUSD(parseFloat(tx.amount_deducted) || 0)}</span>
+          <span class="tx-detail-value" style="color: var(--expense); font-weight: 700;">-${formatUSD(deducted)}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Com. Destino (${toAcc?.name || '?'})</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.commission_to) || 0)}%</span>
+          <span class="tx-detail-value">${comTo > 0 ? formatUSD(comTo) : 'Sin comisión ($0)'}</span>
         </div>
         <div class="tx-detail-item" style="grid-column: 1 / -1; background: var(--income-bg); padding: 12px; border-radius: 8px;">
           <span class="tx-detail-label" style="color: var(--income);">Recibido en ${toAcc?.name || '?'}</span>
-          <span class="tx-detail-value" style="font-size: 1.2rem; color: var(--income);">+${formatUSD(parseFloat(tx.net_received) || 0)}</span>
+          <span class="tx-detail-value" style="font-size: 1.2rem; color: var(--income); font-weight: 700;">+${formatUSD(received)}</span>
         </div>
       </div>
+      ${(comFrom === 0 && comTo === 0) ? `
+        <div style="padding: 10px 12px; background: var(--primary-50); border: 1px dashed var(--primary); border-radius: 8px; margin-top: 12px; font-size: 0.82rem; color: var(--text-secondary); text-align: center;">
+          💡 Puedes editar la transacción en cualquier momento para agregar las comisiones bancarias cuando se confirmen.
+        </div>
+      ` : ''}
       <div class="form-group" style="margin-top: 16px;">
         <div class="form-label">Descripción</div>
         <div style="font-size: 0.95rem; padding: 8px 0;">${escapeHtml(tx.description || 'Transferencia entre cuentas')}</div>
@@ -688,7 +699,7 @@ function renderFormFields() {
       </div>
 
       <div class="form-group">
-        <div class="form-label">Dirección</div>
+        <div class="form-label">Dirección de la Transferencia</div>
         <div class="account-selector">
           <div class="account-pill selected" id="from-pill" data-account="${zelleId}">⚡ Zelle</div>
           <div class="account-arrow">→</div>
@@ -698,22 +709,24 @@ function renderFormFields() {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="f-transfer-amount">Monto a Transferir (USD)</label>
+        <label class="form-label" for="f-transfer-amount">Monto a Transferir (U$S)</label>
         <input id="f-transfer-amount" class="form-input" type="number" step="0.01" min="0" placeholder="0.00" oninput="calcTransfer()" required>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="f-commission-from">Com. Origen (%)</label>
-          <input id="f-commission-from" class="form-input" type="number" step="0.01" min="0" placeholder="0" value="0" oninput="calcTransfer()">
+          <label class="form-label" for="f-commission-from-usd">Comisión Origen (U$S)</label>
+          <input id="f-commission-from-usd" class="form-input" type="number" step="0.01" min="0" placeholder="0.00" value="0" oninput="calcTransfer()">
+          <div class="form-hint">Opcional (se puede editar luego)</div>
         </div>
         <div class="form-group">
-          <label class="form-label" for="f-commission-to">Com. Destino (%)</label>
-          <input id="f-commission-to" class="form-input" type="number" step="0.01" min="0" placeholder="0" value="0" oninput="calcTransfer()">
+          <label class="form-label" for="f-commission-to-usd">Comisión Destino (U$S)</label>
+          <input id="f-commission-to-usd" class="form-input" type="number" step="0.01" min="0" placeholder="0.00" value="0" oninput="calcTransfer()">
+          <div class="form-hint">Opcional (se puede editar luego)</div>
         </div>
       </div>
 
-      <div class="form-row">
+      <div class="form-row" style="margin-top: 8px;">
         <div class="form-group">
           <div class="form-label">Deducido de Origen</div>
           <div class="form-calculated" id="f-deducted-display" style="color: var(--expense); border-color: var(--expense);">-$0.00</div>
@@ -776,11 +789,11 @@ function calcUruguay() {
 
 function calcTransfer() {
   const amount = parseFloat($('f-transfer-amount')?.value) || 0;
-  const comFrom = parseFloat($('f-commission-from')?.value) || 0;
-  const comTo = parseFloat($('f-commission-to')?.value) || 0;
+  const comFromUSD = parseFloat($('f-commission-from-usd')?.value) || 0;
+  const comToUSD = parseFloat($('f-commission-to-usd')?.value) || 0;
 
-  const deducted = amount * (1 + comFrom / 100);
-  const received = amount * (1 - comTo / 100);
+  const deducted = amount + comFromUSD;
+  const received = Math.max(0, amount - comToUSD);
 
   if ($('f-deducted-display')) $('f-deducted-display').textContent = `-${formatUSD(deducted)}`;
   if ($('f-received-display')) $('f-received-display').textContent = `+${formatUSD(received)}`;
@@ -823,11 +836,10 @@ function populateFormFields(tx) {
   } else if (tx.type === 'transfer') {
     if ($('f-description')) $('f-description').value = tx.description || '';
     if ($('f-transfer-amount')) $('f-transfer-amount').value = tx.transfer_amount || '';
-    if ($('f-commission-from')) $('f-commission-from').value = tx.commission_from || 0;
-    if ($('f-commission-to')) $('f-commission-to').value = tx.commission_to || 0;
+    if ($('f-commission-from-usd')) $('f-commission-from-usd').value = tx.commission_from_usd ?? tx.commission_from ?? 0;
+    if ($('f-commission-to-usd')) $('f-commission-to-usd').value = tx.commission_to_usd ?? tx.commission_to ?? 0;
     if ($('f-date')) $('f-date').value = toLocalDatetime(tx.date);
 
-    // Set correct account direction
     const fromPill = $('from-pill');
     const toPill = $('to-pill');
     const zelleId = getAccountId('Zelle');
@@ -838,6 +850,11 @@ function populateFormFields(tx) {
       fromPill.innerHTML = '🇺🇾 Uruguay';
       toPill.dataset.account = zelleId;
       toPill.innerHTML = '⚡ Zelle';
+    } else {
+      fromPill.dataset.account = zelleId;
+      fromPill.innerHTML = '⚡ Zelle';
+      toPill.dataset.account = uruguayId;
+      toPill.innerHTML = '🇺🇾 Uruguay';
     }
 
     calcTransfer();
@@ -922,11 +939,6 @@ async function saveTransaction() {
     data.bs_amount = bsAmount;
     data.step2_date = step2Date;
     data.step2_completed = step2Completed;
-    const fromPill = $('from-pill');
-    const toPill = $('to-pill');
-    const zelleId = getAccountId('Zelle');
-    const uruguayId = getAccountId('Uruguay');
-
     if (tx.from_account_id === uruguayId) {
       fromPill.dataset.account = uruguayId;
       fromPill.innerHTML = '🇺🇾 Uruguay';
@@ -1004,16 +1016,18 @@ async function saveTransaction() {
       showToast('Ingresa un monto válido', 'error');
       return;
     }
-    const comFrom = parseFloat($('f-commission-from')?.value) || 0;
-    const comTo = parseFloat($('f-commission-to')?.value) || 0;
+    const comFromUSD = parseFloat($('f-commission-from-usd')?.value) || 0;
+    const comToUSD = parseFloat($('f-commission-to-usd')?.value) || 0;
 
     data.from_account_id = $('from-pill').dataset.account;
     data.to_account_id = $('to-pill').dataset.account;
     data.transfer_amount = amount;
-    data.commission_from = comFrom;
-    data.commission_to = comTo;
-    data.amount_deducted = amount * (1 + comFrom / 100);
-    data.net_received = amount * (1 - comTo / 100);
+    data.commission_from_usd = comFromUSD;
+    data.commission_to_usd = comToUSD;
+    data.commission_from = comFromUSD;
+    data.commission_to = comToUSD;
+    data.amount_deducted = amount + comFromUSD;
+    data.net_received = Math.max(0, amount - comToUSD);
   }
 
   showLoading(true);
