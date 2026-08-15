@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1A9E8F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Platica — Tus finanzas más divertidas. Registro de dinero en cuenta Zelle y Uruguay.">
+  <title>Platica — Tus Finanzas</title>
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- ═══════ LOGIN SCREEN ═══════ -->
+    <div id="login-screen" class="screen active">
+      <div class="login-container">
+        <img src="logo.png" alt="Platica — Tus finanzas más divertidas" class="login-logo">
+        <form class="login-form" id="login-form">
+          <div class="input-group">
+            <input type="text" id="login-username" class="input-field" placeholder="Usuario" autocomplete="username" autocapitalize="none" required>
+            <span class="input-icon">👤</span>
+          </div>
+          <div class="input-group">
+            <input type="password" id="login-password" class="input-field" placeholder="Contraseña" autocomplete="current-password" required>
+            <span class="input-icon">🔒</span>
+          </div>
+          <div id="login-error" class="login-error"></div>
+          <button type="submit" id="login-btn" class="btn btn-primary btn-block">
+            Entrar
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ═══════ MAIN SCREEN ═══════ -->
+    <div id="main-screen" class="screen">
+
+      <!-- Header -->
+      <header class="header">
+        <img src="logo.png" alt="Platica" class="header-logo">
+        <span class="header-title">Platica</span>
+        <div class="header-spacer"></div>
+        <div class="header-user">
+          <span id="user-badge" class="user-badge"></span>
+          <button id="logout-btn" class="logout-btn" title="Cerrar sesión">🚪</button>
+        </div>
+      </header>
+
+      <!-- Balance Section -->
+      <section class="balance-section">
+        <div class="balance-global">
+          <div class="balance-label">Saldo Global</div>
+          <div class="balance-amount" id="global-balance">$0.00</div>
+          <div class="balance-currency">Dólares Americanos (USD)</div>
+        </div>
+        <div class="balance-row">
+          <div class="balance-card zelle">
+            <div class="card-header">
+              <div class="card-icon">⚡</div>
+              <span class="card-name">Zelle</span>
+            </div>
+            <div class="card-amount" id="zelle-balance">$0.00</div>
+          </div>
+          <div class="balance-card uruguay">
+            <div class="card-header">
+              <div class="card-icon">🇺🇾</div>
+              <span class="card-name">Uruguay</span>
+            </div>
+            <div class="card-amount" id="uruguay-balance">$0.00</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filter Tabs -->
+      <section class="filter-section">
+        <div class="filter-tabs" id="filter-tabs">
+          <button class="filter-tab active" data-filter="all">Todas</button>
+          <button class="filter-tab" data-filter="zelle">⚡ Zelle</button>
+          <button class="filter-tab" data-filter="uruguay">🇺🇾 Uruguay</button>
+          <button class="filter-tab" data-filter="transfer">🔄 Transferencias</button>
+        </div>
+      </section>
+
+      <!-- Transactions List -->
+      <section class="transactions-section">
+        <div class="section-header">
+          <span class="section-title">Movimientos</span>
+          <span class="transaction-count" id="tx-count"></span>
+        </div>
+        <div class="transactions-list" id="transactions-list">
+          <!-- Dynamic content -->
+        </div>
+      </section>
+
+      <!-- FAB (admin only) -->
+      <button id="fab" class="fab" style="display:none;" title="Nueva transacción">+</button>
+    </div>
+
+    <!-- ═══════ FORM SCREEN ═══════ -->
+    <div id="form-screen" class="screen">
+
+      <!-- Form Header -->
+      <header class="form-header">
+        <button id="form-back-btn" class="form-back-btn">←</button>
+        <span class="form-title" id="form-title">Nueva Transacción</span>
+        <button id="form-delete-btn" class="form-delete-btn" style="display:none;" title="Eliminar">🗑️</button>
+      </header>
+
+      <div class="form-body">
+        <!-- Type Selector -->
+        <div class="type-selector" id="type-selector">
+          <button class="type-option selected" data-type="zelle">
+            <span class="type-icon">⚡</span>
+            <span class="type-name">Zelle</span>
+          </button>
+          <button class="type-option" data-type="uruguay">
+            <span class="type-icon">🇺🇾</span>
+            <span class="type-name">Uruguay</span>
+          </button>
+          <button class="type-option" data-type="transfer">
+            <span class="type-icon">🔄</span>
+            <span class="type-name">Transfer</span>
+          </button>
+        </div>
+
+        <!-- Dynamic Form Container -->
+        <div id="form-fields"></div>
+
+        <!-- Save Button -->
+        <div class="form-actions">
+          <button id="form-cancel-btn" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+          <button id="form-save-btn" class="btn btn-primary" style="flex:2;">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ DETAIL SCREEN ═══════ -->
+    <div id="detail-screen" class="screen">
+      <header class="form-header">
+        <button id="detail-back-btn" class="form-back-btn">←</button>
+        <span class="form-title" id="detail-title">Detalle</span>
+        <button id="detail-edit-btn" class="form-delete-btn" style="display:none;" title="Editar">✏️</button>
+      </header>
+      <div class="form-body" id="detail-content">
+        <!-- Dynamic detail content -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════ MODAL ═══════ -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-icon" id="modal-icon">⚠️</div>
+      <div class="modal-title" id="modal-title">¿Estás seguro?</div>
+      <div class="modal-message" id="modal-message"></div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-secondary btn-sm">Cancelar</button>
+        <button id="modal-confirm" class="btn btn-danger btn-sm">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TOAST ═══════ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ═══════ LOADING ═══════ -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Cargando...</div>
+  </div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
