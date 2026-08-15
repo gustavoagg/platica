@@ -59,8 +59,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   commission_to_usd NUMERIC DEFAULT 0,    -- Flat USD commission on destination side
   commission_from NUMERIC DEFAULT 0,      -- Legacy fallback
   commission_to NUMERIC DEFAULT 0,        -- Legacy fallback
-  amount_deducted NUMERIC,      -- Total deducted from origin: transfer_amount + commission_from_usd
-  net_received NUMERIC,         -- Net amount received at destination: transfer_amount - commission_to_usd
+  amount_deducted NUMERIC,      -- Total deducted from origin
+  net_received NUMERIC,         -- Net amount received at destination
+  is_confirmed BOOLEAN DEFAULT FALSE,     -- True = Confirmed, False = In transit
 
   -- ── Audit ──
   created_by TEXT NOT NULL,
@@ -81,6 +82,7 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_date TIMESTAMPTZ;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS step2_completed BOOLEAN DEFAULT FALSE;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_from_usd NUMERIC DEFAULT 0;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_to_usd NUMERIC DEFAULT 0;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_confirmed BOOLEAN DEFAULT FALSE;
 
 -- 4. Indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC);

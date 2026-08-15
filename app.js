@@ -325,7 +325,8 @@ function renderTransactionItem(tx) {
     const amount = parseFloat(tx.transfer_amount) || 0;
     amountDisplay = formatUSD(amount);
     amountClass = 'transfer-out';
-    commissionText = `${fromAcc?.name || '?'} → ${toAcc?.name || '?'}`;
+    const statusTag = tx.is_confirmed ? '✅ Confirmada' : '⏳ En tránsito';
+    commissionText = `${fromAcc?.name || '?'} → ${toAcc?.name || '?'} (${statusTag})`;
   }
 
   const description = tx.description || (tx.type === 'transfer' ? 'Transferencia entre cuentas' : 'Sin descripción');
@@ -480,10 +481,11 @@ function viewTransaction(id) {
     const comTo = parseFloat(tx.commission_to_usd ?? tx.commission_to) || 0;
     const deducted = parseFloat(tx.amount_deducted) || (transferAmount + comFrom);
     const received = parseFloat(tx.net_received) || Math.max(0, transferAmount - comTo);
+    const isConfirmed = !!tx.is_confirmed;
 
     html = `
-      <div class="balance-global" style="background: linear-gradient(135deg, #F59E0B, #D97706); margin-bottom: 16px;">
-        <div class="balance-label">🔄 Transferencia</div>
+      <div class="balance-global" style="background: ${isConfirmed ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #D97706, #B45309)'}; margin-bottom: 16px;">
+        <div class="balance-label">${isConfirmed ? '✅ Transferencia Confirmada' : '⏳ Transferencia En Tránsito'}</div>
         <div class="balance-amount">${formatUSD(transferAmount)}</div>
         <div class="balance-currency">${fromAcc?.name || '?'} → ${toAcc?.name || '?'}</div>
       </div>
@@ -491,6 +493,10 @@ function viewTransaction(id) {
         <div class="tx-detail-item">
           <span class="tx-detail-label">Monto a Transferir</span>
           <span class="tx-detail-value">${formatUSD(transferAmount)}</span>
+        </div>
+        <div class="tx-detail-item">
+          <span class="tx-detail-label">Estado</span>
+          <span class="tx-detail-value" style="font-weight: 700; color: ${isConfirmed ? 'var(--income)' : '#D97706'};">${isConfirmed ? '✅ Confirmada' : '⏳ En tránsito'}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Com. Origen (${fromAcc?.name || '?'})</span>
@@ -509,9 +515,9 @@ function viewTransaction(id) {
           <span class="tx-detail-value" style="font-size: 1.2rem; color: var(--income); font-weight: 700;">+${formatUSD(received)}</span>
         </div>
       </div>
-      ${(comFrom === 0 && comTo === 0) ? `
-        <div style="padding: 10px 12px; background: var(--primary-50); border: 1px dashed var(--primary); border-radius: 8px; margin-top: 12px; font-size: 0.82rem; color: var(--text-secondary); text-align: center;">
-          💡 Puedes editar la transacción en cualquier momento para agregar las comisiones bancarias cuando se confirmen.
+      ${!isConfirmed ? `
+        <div style="padding: 10px 12px; background: #FEF3C7; border: 1px dashed #F59E0B; border-radius: 8px; margin-top: 12px; font-size: 0.85rem; color: #92400E; text-align: center;">
+          ⏳ Esta transferencia está <strong>En Tránsito</strong>. Toca "Editar" para marcarla como confirmada cuando se acrediten los fondos.
         </div>
       ` : ''}
       <div class="form-group" style="margin-top: 16px;">
@@ -737,6 +743,14 @@ function renderFormFields() {
         </div>
       </div>
 
+      <div class="form-group" style="margin-top: 14px; background: var(--primary-50); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--primary-100);">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--primary-dark);">
+          <input type="checkbox" id="f-is-confirmed" style="width: 20px; height: 20px; accent-color: var(--primary);">
+          <span>✅ Transferencia confirmada</span>
+        </label>
+        <div class="form-hint" style="margin-top: 4px; margin-left: 30px;">Si no la marcas, la transferencia quedará como "⏳ En tránsito".</div>
+      </div>
+
       <div class="form-group">
         <label class="form-label" for="f-date">Fecha</label>
         <input id="f-date" class="form-input" type="datetime-local" value="${getLocalDatetime()}">
@@ -838,6 +852,7 @@ function populateFormFields(tx) {
     if ($('f-transfer-amount')) $('f-transfer-amount').value = tx.transfer_amount || '';
     if ($('f-commission-from-usd')) $('f-commission-from-usd').value = tx.commission_from_usd ?? tx.commission_from ?? 0;
     if ($('f-commission-to-usd')) $('f-commission-to-usd').value = tx.commission_to_usd ?? tx.commission_to ?? 0;
+    if ($('f-is-confirmed')) $('f-is-confirmed').checked = !!tx.is_confirmed;
     if ($('f-date')) $('f-date').value = toLocalDatetime(tx.date);
 
     const fromPill = $('from-pill');
