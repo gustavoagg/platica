@@ -954,77 +954,6 @@ async function saveTransaction() {
     data.bs_amount = bsAmount;
     data.step2_date = step2Date;
     data.step2_completed = step2Completed;
-    if (tx.from_account_id === uruguayId) {
-      fromPill.dataset.account = uruguayId;
-      fromPill.innerHTML = '🇺🇾 Uruguay';
-      toPill.dataset.account = zelleId;
-      toPill.innerHTML = '⚡ Zelle';
-    }
-
-    calcTransfer();
-  }
-}
-
-function toLocalDatetime(dateStr) {
-  const d = new Date(dateStr);
-  const offset = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - offset * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-// ═══════════════════════════════════════════════════════════
-// SAVE / DELETE TRANSACTION
-// ═══════════════════════════════════════════════════════════
-
-async function saveTransaction() {
-  const type = state.formType;
-  const isEdit = !!state.editing;
-
-  let data = {
-    type,
-    description: $('f-description')?.value?.trim() || null,
-    date: new Date($('f-date')?.value || new Date()).toISOString(),
-  };
-
-  if (isEdit) {
-    data.modified_by = state.user.username;
-  } else {
-    data.created_by = state.user.username;
-  }
-
-  if (type === 'zelle') {
-    const direction = document.querySelector('.direction-option.selected')?.dataset.dir || 'expense';
-    const amount = parseFloat($('f-amount')?.value);
-    if (!amount || amount <= 0) {
-      showToast('Ingresa un monto válido', 'error');
-      return;
-    }
-    data.account_id = getAccountId('Zelle');
-    data.direction = direction;
-    data.amount = amount;
-    data.commission = parseFloat($('f-commission')?.value) || 0;
-  } else if (type === 'uruguay') {
-    const usdAmount = parseFloat($('f-usd-amount')?.value);
-    const exchangeRate = parseFloat($('f-exchange-rate')?.value);
-    if (!usdAmount || usdAmount <= 0 || !exchangeRate || exchangeRate <= 0) {
-      showToast('Ingresa monto USD y tasa de cambio', 'error');
-      return;
-    }
-    const binanceCommission = parseFloat($('f-binance-commission')?.value) || 0;
-    const p2pCommission = parseFloat($('f-p2p-commission')?.value) || 0;
-    const uyuAmount = usdAmount * exchangeRate;
-    const usdtAmount = usdAmount * (1 - binanceCommission / 100);
-    const bsAmount = parseFloat($('f-bs-amount')?.value) || 0;
-
-    data.account_id = getAccountId('Uruguay');
-    data.direction = 'expense';
-    data.usd_amount = usdAmount;
-    data.exchange_rate = exchangeRate;
-    data.uyu_amount = uyuAmount;
-    data.binance_commission = binanceCommission;
-    data.usdt_amount = usdtAmount;
-    data.p2p_commission = p2pCommission;
-    data.bs_amount = bsAmount;
   } else if (type === 'transfer') {
     const amount = parseFloat($('f-transfer-amount')?.value);
     if (!amount || amount <= 0) {
@@ -1041,6 +970,7 @@ async function saveTransaction() {
     data.commission_to = comToUSD;
     data.amount_deducted = amount + comFromUSD;
     data.net_received = Math.max(0, amount - comToUSD);
+    data.is_confirmed = $('f-is-confirmed')?.checked || false;
   }
 
   showLoading(true);
