@@ -88,12 +88,10 @@ function showModal(icon, title, message, confirmText, onConfirm) {
   $('modal-confirm').textContent = confirmText;
   $('modal-overlay').classList.add('active');
 
-  const handler = () => {
+  $('modal-confirm').onclick = () => {
     $('modal-overlay').classList.remove('active');
-    $('modal-confirm').removeEventListener('click', handler);
     onConfirm();
   };
-  $('modal-confirm').addEventListener('click', handler);
 }
 
 $('modal-cancel').addEventListener('click', () => {
@@ -133,8 +131,6 @@ async function login(username, password) {
   sessionStorage.setItem('platica_user', JSON.stringify(data));
   return data;
 }
-
-
 
 function logout() {
   state.user = null;
@@ -227,7 +223,7 @@ function calculateBalance(accountName) {
       if (tx.from_account_id === accountId) {
         balance -= parseFloat(tx.amount_deducted) || 0;
       }
-      if (tx.to_account_id === accountId) {
+      if (tx.to_account_id === accountId && tx.is_confirmed !== false) {
         balance += parseFloat(tx.net_received) || 0;
       }
     }
