@@ -214,8 +214,13 @@ function calculateBalance(accountName) {
 
     if (tx.type === 'uruguay' && tx.account_id === accountId) {
       const usdAmount = parseFloat(tx.usd_amount) || 0;
-      const commissionUSD = parseFloat(tx.commission_usd) || 0;
-      const totalDeducted = parseFloat(tx.total_uy_deducted) || (usdAmount + commissionUSD);
+      const itauRate = parseFloat(tx.itau_rate || tx.exchange_rate) || 0;
+      const binanceRate = parseFloat(tx.binance_usdt_rate || tx.binance_commission) || 0;
+      let commissionUSD = parseFloat(tx.commission_usd || tx.commission) || 0;
+      if (commissionUSD === 0 && itauRate > 0 && binanceRate > 0) {
+        commissionUSD = ((binanceRate - itauRate) / itauRate) * usdAmount;
+      }
+      const totalDeducted = parseFloat(tx.total_uy_deducted || tx.amount) || (usdAmount + commissionUSD);
       balance -= totalDeducted;
     }
 
@@ -304,14 +309,21 @@ function renderTransactionItem(tx) {
     }
   } else if (tx.type === 'uruguay') {
     const usd = parseFloat(tx.usd_amount) || 0;
-    const comUSD = parseFloat(tx.commission_usd) || 0;
-    const totalDeducted = parseFloat(tx.total_uy_deducted) || (usd + comUSD);
+    const itauRate = parseFloat(tx.itau_rate || tx.exchange_rate) || 0;
+    const binanceRate = parseFloat(tx.binance_usdt_rate || tx.binance_commission) || 0;
+    let comUSD = parseFloat(tx.commission_usd || tx.commission) || 0;
+    if (comUSD === 0 && itauRate > 0 && binanceRate > 0) {
+      comUSD = ((binanceRate - itauRate) / itauRate) * usd;
+    }
+    const totalDeducted = parseFloat(tx.total_uy_deducted || tx.amount) || (usd + comUSD);
     amountDisplay = `-${formatUSD(totalDeducted)}`;
     amountClass = 'expense';
+
     const bs = parseFloat(tx.bs_amount) || 0;
+    const p2pRate = parseFloat(tx.usdt_p2p_rate || tx.p2p_commission) || 0;
     const usdt = parseFloat(tx.usdt_amount) || usd;
-    if (tx.step2_completed || bs > 0) {
-      commissionText = `→ ${formatNumber(bs)} Bs`;
+    if (tx.step2_completed || p2pRate > 0 || bs > 0) {
+      commissionText = `→ ${formatNumber(bs > 0 ? bs : usdt * p2pRate)} Bs`;
     } else {
       commissionText = `→ ${formatNumber(usdt)} USDT (Paso 1)`;
     }
@@ -396,11 +408,17 @@ function viewTransaction(id) {
     `;
   } else if (tx.type === 'uruguay') {
     const usd = parseFloat(tx.usd_amount) || 0;
-    const comUSD = parseFloat(tx.commission_usd) || 0;
-    const totalDeducted = parseFloat(tx.total_uy_deducted) || (usd + comUSD);
-    const bs = parseFloat(tx.bs_amount) || 0;
+    const itauRate = parseFloat(tx.itau_rate || tx.exchange_rate) || 0;
+    const binanceRate = parseFloat(tx.binance_usdt_rate || tx.binance_commission) || 0;
+    let comUSD = parseFloat(tx.commission_usd || tx.commission) || 0;
+    if (comUSD === 0 && itauRate > 0 && binanceRate > 0) {
+      comUSD = ((binanceRate - itauRate) / itauRate) * usd;
+    }
+    const totalDeducted = parseFloat(tx.total_uy_deducted || tx.amount) || (usd + comUSD);
     const usdt = parseFloat(tx.usdt_amount) || usd;
-    const isStep2Done = tx.step2_completed || bs > 0;
+    const p2pRate = parseFloat(tx.usdt_p2p_rate || tx.p2p_commission) || 0;
+    const bs = parseFloat(tx.bs_amount) || (p2pRate > 0 ? usdt * p2pRate : 0);
+    const isStep2Done = !!(tx.step2_completed || p2pRate > 0 || bs > 0);
 
     html = `
       <div class="balance-global" style="background: linear-gradient(135deg, #059669, #047857); margin-bottom: 16px;">
@@ -417,11 +435,11 @@ function viewTransaction(id) {
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Tasa U$S/UYU (ITAU)</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.itau_rate || tx.exchange_rate) || 0, 4)}</span>
+          <span class="tx-detail-value">${formatNumber(itauRate, 4)}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Tasa USDT (Binance)</span>
-          <span class="tx-detail-value">${formatNumber(parseFloat(tx.binance_usdt_rate) || 0, 4)}</span>
+          <span class="tx-detail-value">${formatNumber(binanceRate, 4)}</span>
         </div>
         <div class="tx-detail-item">
           <span class="tx-detail-label">Comisión adicional U$S</span>
@@ -446,7 +464,7 @@ function viewTransaction(id) {
         <div class="tx-details" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
           <div class="tx-detail-item">
             <span class="tx-detail-label">Tasa P2P (Bs/USDT)</span>
-            <span class="tx-detail-value">${formatNumber(parseFloat(tx.usdt_p2p_rate) || 0, 4)}</span>
+            <span class="tx-detail-value">${formatNumber(p2pRate, 4)}</span>
           </div>
           <div class="tx-detail-item">
             <span class="tx-detail-label">Fecha Paso 2</span>
@@ -837,10 +855,10 @@ function populateFormFields(tx) {
     if ($('f-description')) $('f-description').value = tx.description || '';
     if ($('f-usd-amount')) $('f-usd-amount').value = tx.usd_amount || '';
     if ($('f-itau-rate')) $('f-itau-rate').value = tx.itau_rate || tx.exchange_rate || '';
-    if ($('f-binance-usdt-rate')) $('f-binance-usdt-rate').value = tx.binance_usdt_rate || '';
+    if ($('f-binance-usdt-rate')) $('f-binance-usdt-rate').value = tx.binance_usdt_rate || tx.binance_commission || '';
     if ($('f-step1-date')) $('f-step1-date').value = toLocalDatetime(tx.step1_date || tx.date);
 
-    if ($('f-usdt-p2p-rate')) $('f-usdt-p2p-rate').value = tx.usdt_p2p_rate || '';
+    if ($('f-usdt-p2p-rate')) $('f-usdt-p2p-rate').value = tx.usdt_p2p_rate || tx.p2p_commission || '';
     if ($('f-step2-date')) $('f-step2-date').value = toLocalDatetime(tx.step2_date || tx.date);
     calcUruguay();
   } else if (tx.type === 'transfer') {
@@ -928,28 +946,21 @@ async function saveTransaction() {
     const step1Date = new Date($('f-step1-date')?.value || new Date()).toISOString();
 
     const p2pRate = parseFloat($('f-usdt-p2p-rate')?.value) || null;
-    const step2DateVal = $('f-step2-date')?.value;
-    const step2Date = p2pRate && step2DateVal ? new Date(step2DateVal).toISOString() : null;
     const bsAmount = p2pRate ? usdtAmount * p2pRate : null;
-    const step2Completed = !!p2pRate && p2pRate > 0;
 
     data.account_id = getAccountId('Uruguay');
     data.direction = 'expense';
     data.date = step1Date;
-    data.step1_date = step1Date;
-    data.usd_amount = usdAmount;
-    data.itau_rate = itauRate;
-    data.exchange_rate = itauRate;
-    data.binance_usdt_rate = binanceRate;
-    data.rate_diff = rateDiff;
-    data.commission_usd = commissionUSD;
-    data.total_uy_deducted = totalDeducted;
-    data.usdt_amount = usdtAmount;
 
-    data.usdt_p2p_rate = p2pRate;
-    data.bs_amount = bsAmount;
-    data.step2_date = step2Date;
-    data.step2_completed = step2Completed;
+    // Standard columns present in original Supabase table schema
+    data.usd_amount = usdAmount;
+    data.exchange_rate = itauRate;           // ITAU rate
+    data.binance_commission = binanceRate;   // Binance rate
+    data.commission = commissionUSD;          // Extra commission USD
+    data.amount = totalDeducted;              // Total deducted UY
+    data.usdt_amount = usdtAmount;           // Resulting USDT
+    data.p2p_commission = p2pRate;           // P2P rate (Bs/USDT)
+    data.bs_amount = bsAmount;               // Final Bs amount
   } else if (type === 'transfer') {
     const amount = parseFloat($('f-transfer-amount')?.value);
     if (!amount || amount <= 0) {
