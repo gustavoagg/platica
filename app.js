@@ -491,8 +491,8 @@ function viewTransaction(id) {
     const fromAcc = state.accounts.find(a => a.id === tx.from_account_id);
     const toAcc = state.accounts.find(a => a.id === tx.to_account_id);
     const transferAmount = parseFloat(tx.transfer_amount) || 0;
-    const comFrom = parseFloat(tx.commission_from_usd ?? tx.commission_from) || 0;
-    const comTo = parseFloat(tx.commission_to_usd ?? tx.commission_to) || 0;
+    const comFrom = parseFloat(tx.commission_from_usd) || parseFloat(tx.commission_from) || 0;
+    const comTo = parseFloat(tx.commission_to_usd) || parseFloat(tx.commission_to) || 0;
     const deducted = parseFloat(tx.amount_deducted) || (transferAmount + comFrom);
     const received = parseFloat(tx.net_received) || Math.max(0, transferAmount - comTo);
     const isConfirmed = !!tx.is_confirmed;
@@ -864,8 +864,8 @@ function populateFormFields(tx) {
   } else if (tx.type === 'transfer') {
     if ($('f-description')) $('f-description').value = tx.description || '';
     if ($('f-transfer-amount')) $('f-transfer-amount').value = tx.transfer_amount || '';
-    if ($('f-commission-from-usd')) $('f-commission-from-usd').value = tx.commission_from_usd ?? tx.commission_from ?? 0;
-    if ($('f-commission-to-usd')) $('f-commission-to-usd').value = tx.commission_to_usd ?? tx.commission_to ?? 0;
+    if ($('f-commission-from-usd')) $('f-commission-from-usd').value = parseFloat(tx.commission_from_usd) || parseFloat(tx.commission_from) || 0;
+    if ($('f-commission-to-usd')) $('f-commission-to-usd').value = parseFloat(tx.commission_to_usd) || parseFloat(tx.commission_to) || 0;
     if ($('f-is-confirmed')) $('f-is-confirmed').checked = !!tx.is_confirmed;
     if ($('f-date')) $('f-date').value = toLocalDatetime(tx.date);
 
@@ -973,7 +973,9 @@ async function saveTransaction() {
     data.from_account_id = $('from-pill').dataset.account;
     data.to_account_id = $('to-pill').dataset.account;
     data.transfer_amount = amount;
+    data.commission_from_usd = comFromUSD;
     data.commission_from = comFromUSD;
+    data.commission_to_usd = comToUSD;
     data.commission_to = comToUSD;
     data.amount_deducted = amount + comFromUSD;
     data.net_received = Math.max(0, amount - comToUSD);
